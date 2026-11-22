@@ -1,0 +1,36 @@
+name: GosDesk CI
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node.js 24 / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm test
+
+  container:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t gosdesk:ci .
+      - name: Start the demo and check its API
+        run: |
+          docker run -d --name gosdesk -p 127.0.0.1:3000:3000 gosdesk:ci node bin/server.mjs --demo
+          curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:3000/api/health
+          curl --fail --silent --cookie-jar "$RUNNER_TEMP/gosdesk.cookies" \
+            -H 'Content-Type: application/json' -d '{"profileId":1}' http://127.0.0.1:3000/api/session/demo
+          curl --fail --silent --cookie "$RUNNER_TEMP/gosdesk.cookies" http://127.0.0.1:3000/api/tickets | jq -e '.total == 48'
+      - if: always()
+        run: docker logs gosdesk 2>/dev/null || true

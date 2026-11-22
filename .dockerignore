@@ -1,0 +1,9 @@
+.git
+.github
+var
+node_modules
+docs
+tests
+*.sqlite*
+.env
+.DS_Store
